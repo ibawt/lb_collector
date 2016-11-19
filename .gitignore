@@ -1,3 +1,4 @@
+<<<<<<< f5b9b469d5e20543fc5f0f6da2d0dfe167b9d8d0
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
@@ -22,3 +23,4 @@ _testmain.go
 *.exe
 *.test
 *.prof
+/lb_collector
