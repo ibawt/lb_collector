@@ -14,8 +14,9 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"golang.org/x/net/context"
 	_ "golang.org/x/oauth2"
-	_ "golang.org/x/oauth2/google"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 // LoadBalancerCollector ...
@@ -66,7 +67,11 @@ func (lbc *LoadBalancerCollector) emitMetric(h *HTTPRequest) error {
 func (lbc *LoadBalancerCollector) listen() error {
 	ctx := context.Background()
 
-	client, err := pubsub.NewClient(ctx, lbc.project)
+	ts, err := google.DefaultTokenSource(ctx, pubsub.ScopePubSub)
+	if err != nil {
+		return err
+	}
+	client, err := pubsub.NewClient(ctx, lbc.project, option.WithTokenSource(ts))
 	if err != nil {
 		return err
 	}
