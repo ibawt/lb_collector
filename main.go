@@ -59,7 +59,8 @@ func (lbc *LoadBalancerCollector) emitMetric(h *HTTPRequest) error {
 		fmt.Sprintf("hostname:%s", getBaseHost(h.RequestURL)),
 	}
 
-	return lbc.statsdClient.Incr("http.request", tags, 1.0)
+	log.WithField("status", h.Status).WithField("hostname", h.RequestURL).Info("emit")
+	return lbc.statsdClient.Incr("glbc.http.request", tags, 1.0)
 }
 
 func (lbc *LoadBalancerCollector) listen() error {
@@ -113,7 +114,7 @@ func (lbc *LoadBalancerCollector) listen() error {
 	}
 }
 
-func (lbc *LoadBalancerCollector) healthCheckListener(url string) error {
+func (lbc *LoadBalancerCollector) healthCheckListener(url string) {
 	http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte("PONG\n"))
@@ -123,14 +124,12 @@ func (lbc *LoadBalancerCollector) healthCheckListener(url string) error {
 	})
 	err := http.ListenAndServe(url, nil)
 	if err != nil {
-		return err
+		log.WithError(err).Fatal("Healthcheck listener failed!")
 	}
-	log.WithField("HealthCheckAddress", url).Info("HealthCheck listening...")
-	return nil
 }
 
 func main() {
-	var statsdEndpoint = flag.String("statsd", "statsd.default", "StatsD endpoint")
+	var statsdEndpoint = flag.String("statsd", "localhost:8125", "StatsD endpoint")
 	var project = flag.String("project", "", "Project ID")
 	var httpServer = flag.String("http", ":8080", "Default host:port for health checks")
 	var bufferLength = flag.Int("buffer", 256, "Amount of statsd messages to buffer")
@@ -140,6 +139,7 @@ func main() {
 		log.Fatalln("Project must be specified!")
 	}
 
+	log.Info("about to make statsd client")
 	sd, err := statsd.NewBuffered(*statsdEndpoint, *bufferLength)
 	if err != nil {
 		log.WithError(err).Fatal("Couldn't create StatsD Client")
@@ -150,10 +150,8 @@ func main() {
 		project:      *project,
 	}
 
-	err = lbCollector.healthCheckListener(*httpServer)
-	if err != nil {
-		log.WithError(err).Fatal("HealthCheckListener failed to start")
-	}
+	go lbCollector.healthCheckListener(*httpServer)
+	log.WithField("HealthCheckAddress", *httpServer).Info("HealthCheck listening...")
 
 	err = lbCollector.listen()
 	if err != nil {
