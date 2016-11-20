@@ -1,0 +1,34 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: lb-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: lb-collector
+  template:
+    metadata:
+      labels:
+        name: lb-collector
+    spec:
+      containers:
+      - name: lb-collector
+        image: gcr.io/shopify-docker-images/lb_collector
+        imagePullPolicy: Always
+        args:
+        - -statsd
+        - statsd:8125
+        - -project
+        - shopify-core-alpha-1239
+        livenessProbe:
+          httpGet:
+            path: /services/ping
+            port: 8080
+        volumeMounts:
+          - mountPath: /etc/ssl
+            name: ssl
+      volumes:
+        - hostPath:
+            path: /etc/ssl
+          name: ssl

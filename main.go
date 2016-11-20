@@ -21,8 +21,9 @@ import (
 
 // LoadBalancerCollector ...
 type LoadBalancerCollector struct {
-	statsdClient *statsd.Client
-	project      string
+	statsdClient    *statsd.Client
+	project         string
+	lastMessageTime time.Time
 }
 
 // LogEntry ...
@@ -78,7 +79,7 @@ func (lbc *LoadBalancerCollector) listen() error {
 
 	topic := client.Topic("loadbalancer-logs") //
 
-	subs, err := client.CreateSubscription(ctx, "lb-collector", topic, 1*time.Minute, nil)
+	subs, err := client.CreateSubscription(ctx, "lb-collector", topic, 0, nil)
 	if err != nil {
 		subs = client.Subscription("lb-collector")
 	}
@@ -98,8 +99,10 @@ func (lbc *LoadBalancerCollector) listen() error {
 			return nil
 		}
 		if err != nil {
-			log.WithError(err).Warn("Error in it.Next()")
+			log.WithError(err).Fatal("Error in it.Next()")
 		} else {
+			lbc.lastMessageTime = time.Now()
+
 			if msg.PublishTime.After(time.Now().Add(-1 * time.Minute)) {
 				decoder := json.NewDecoder(bytes.NewBuffer(msg.Data))
 				var entry LogEntry
@@ -121,10 +124,15 @@ func (lbc *LoadBalancerCollector) listen() error {
 
 func (lbc *LoadBalancerCollector) healthCheckListener(url string) {
 	http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("PONG\n"))
-		if err != nil {
-			log.WithError(err).Warn("Writing health check response")
+		if lbc.lastMessageTime.Before(time.Now().Add(-5 * time.Minute)) {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, "No receieved message in 5 minutes, last message receieved was: %v\n", lbc.lastMessageTime)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte("PONG\n"))
+			if err != nil {
+				log.WithError(err).Warn("Writing health check response")
+			}
 		}
 	})
 	err := http.ListenAndServe(url, nil)
@@ -151,8 +159,9 @@ func main() {
 	}
 
 	lbCollector := LoadBalancerCollector{
-		statsdClient: sd,
-		project:      *project,
+		statsdClient:    sd,
+		project:         *project,
+		lastMessageTime: time.Now(),
 	}
 
 	go lbCollector.healthCheckListener(*httpServer)
