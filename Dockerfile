@@ -1,5 +1,5 @@
 FROM scratch
 
-ADD /lb_collector /
+ADD /lb-collector /
 
-ENTRYPOINT ["/lb_collector"]
+ENTRYPOINT ["/lb-collector"]
