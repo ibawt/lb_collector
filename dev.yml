@@ -1,0 +1,10 @@
+name: lb-collector
+
+up:
+  - homebrew:
+    - glide
+  - go: '1.8'
+
+commands:
+  build: make
+  vendor-update: bin/update-dependencies # glide update
